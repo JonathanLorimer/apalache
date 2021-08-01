@@ -201,10 +201,10 @@ class TypeUnifier {
         if (varNo != otherVarNo) {
           val larger = varNo max otherVarNo
           val smaller = varNo min otherVarNo
-          // If varNo was bound, assign its value to the smaller variable
-          varNoValOpt.map(insert(smaller, _))
-          // Assign the larger variable to the smaller
-          solution += larger -> VarT1(smaller)
+          // If varNo was bound, assign its value to the larger variable
+          varNoValOpt.map(insert(larger, _))
+          // Assign the smaller variable to the larger
+          solution += smaller -> VarT1(larger)
         } // Otherwise, vars are identical, so it's a no-op
         varNoValOpt.orElse(Some(tp))
 
