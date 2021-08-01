@@ -127,22 +127,16 @@ class TestEtcTypeChecker extends FunSuite with EasyMockSugar with BeforeAndAfter
     val listener = mock[TypeCheckerListener]
     val wrapper = wrapWithLet(app)
     expecting {
-      // The constraint solver does not report a problem with the operator application.
       listener.onTypeFound(arg.sourceRef.asInstanceOf[ExactRef], parser("a"))
       listener.onTypeFound(app.sourceRef.asInstanceOf[ExactRef], parser("c"))
-      // But an error is reported at the wrapper level, as the resulting expression is parameterized.
-      listener
-        .onTypeError(wrapper.sourceRef,
-            "Expected a concrete type of operator wrapper, found polymorphic type: (() => c)")
-        .atLeastOnce()
+      listener.onTypeFound(wrapper.sourceRef.asInstanceOf[ExactRef], parser("() => c"))
 
       // consume any types for the wrapper and lambda
       consumeWrapperTypes(listener, wrapper)
     }
     whenExecuting(listener) {
       val computed = checker.compute(listener, TypeContext.empty, wrapper)
-      // an error has been flagged
-      assert(computed.isEmpty)
+      assert(computed.contains(parser("() => c")))
     }
   }
 
@@ -153,21 +147,16 @@ class TestEtcTypeChecker extends FunSuite with EasyMockSugar with BeforeAndAfter
     val listener = mock[TypeCheckerListener]
     val wrapper = wrapWithLet(app)
     expecting {
-      // The constraint solver does not report a problem with the operator application.
       listener.onTypeFound(arg.sourceRef.asInstanceOf[ExactRef], parser("Int"))
       listener.onTypeFound(app.sourceRef.asInstanceOf[ExactRef], parser("a"))
-      // But an error is reported at the wrapper level, as the resulting expression is parameterized.
-      listener
-        .onTypeError(wrapper.sourceRef,
-            "Expected a concrete type of operator wrapper, found polymorphic type: (() => a)")
-        .atLeastOnce()
+      listener.onTypeFound(wrapper.sourceRef.asInstanceOf[ExactRef], parser("() => a"))
 
       // consume any types for the wrapper and lambda
       consumeWrapperTypes(listener, wrapper)
     }
     whenExecuting(listener) {
       val computed = checker.compute(listener, TypeContext.empty, wrapper)
-      assert(computed.isEmpty)
+      assert(computed.contains(parser("() => a")))
     }
   }
 
@@ -454,11 +443,7 @@ class TestEtcTypeChecker extends FunSuite with EasyMockSugar with BeforeAndAfter
     }
   }
 
-  // We explicitly forbid to infer polymorphic user-defined operators, to detect errors as soon as possible.
-  // That is, although the built-in operators are polymorphic and overloaded by design,
-  // the user-defined operators should be simple: no overloading, no polymorphism.
-  // The user can still write polymorphic type signatures and this should be respected.
-  test("no polymorphic let-definitions") {
+  test("polymorphic let-definitions") {
     // let F == lambda x \in Set(a): x in F(Int)
     val xDomain = mkUniqConst(parser("Set(a)"))
     val xName = mkUniqName("x")
@@ -477,12 +462,14 @@ class TestEtcTypeChecker extends FunSuite with EasyMockSugar with BeforeAndAfter
       listener.onTypeFound(xDomain.sourceRef.asInstanceOf[ExactRef], parser("Set(a)")).atLeastOnce()
       listener.onTypeFound(fBody.sourceRef.asInstanceOf[ExactRef], parser("a => a")).atLeastOnce()
       listener.onTypeFound(xInF.sourceRef.asInstanceOf[ExactRef], parser("a"))
-      listener.onTypeError(letIn.sourceRef,
-          "Expected a concrete type of operator F, found polymorphic type: ((a) => a)")
+      listener.onTypeFound(fApp.sourceRef.asInstanceOf[ExactRef], parser("Int"))
+      listener.onTypeFound(fArg.sourceRef.asInstanceOf[ExactRef], parser("Int"))
+      listener.onTypeFound(letIn.sourceRef.asInstanceOf[ExactRef], parser("Int"))
+      listener.onTypeFound(fName.sourceRef.asInstanceOf[ExactRef], parser("a => a"))
     }
     whenExecuting(listener) {
       val computed = checker.compute(listener, TypeContext.empty, letIn)
-      assert(computed.isEmpty)
+      assert(computed.contains(parser("Int")))
     }
   }
 

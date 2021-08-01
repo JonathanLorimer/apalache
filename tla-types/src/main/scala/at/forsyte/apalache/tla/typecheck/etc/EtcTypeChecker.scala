@@ -39,14 +39,8 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
 
         case Some(sub) =>
           val exactType = sub(rootType)
-          if (!inferPolytypes && exactType.usedNames.nonEmpty) {
-            onTypeError(rootEx.sourceRef,
-                s"Expected the top expression to have a concrete type, found polymorphic type: " + exactType)
-            None
-          } else {
-            onTypeFound(rootEx.sourceRef, exactType)
-            Some(exactType)
-          }
+          onTypeFound(rootEx.sourceRef, exactType)
+          Some(exactType)
       }
 
     } catch {
@@ -196,7 +190,7 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
         val lambdaClause = EqClause(lambdaTypeVar, operType)
           .setOnTypeFound(tt => onTypeFound(ex.sourceRef, tt))
           .setOnTypeError((_, ts) =>
-            onTypeError(ex.sourceRef.asInstanceOf[ExactRef], "Type error in lambda: " + ts.head)
+            onTypeError(ex.sourceRef.asInstanceOf[ExactRef], "Type error in parameters: " + ts.head)
           )
         solver.addConstraint(lambdaClause)
         operType
@@ -266,43 +260,23 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
 
         letInSolver.addConstraint(defClause)
 
-        val (preciseDefType, preciseAllVars) =
+        val principalDefType =
           letInSolver.solve() match {
             case None =>
               onTypeError(ex.sourceRef, s"Error when computing the type of $name")
               throw new UnwindException
 
             case Some(sub) =>
-              (sub(defType), subFreeVars(operAllVars, sub))
+              sub(defType)
           }
 
-        // recompute the free variables of the operator
-
-        val isPoly = preciseAllVars.nonEmpty
-        if (!inferPolytypes && isPoly) {
-          onTypeError(ex.sourceRef,
-              s"Expected a concrete type of operator $name, found polymorphic type: " + preciseDefType)
-          throw new UnwindException
-        }
-
-        // TODO: check that the inferred signature matches the annotation?
+        // Find free variables of the principal type and use them as quantified variables
+        val freeVars = principalDefType.usedNames.filter(_ >= ctx.poolSize)
 
         // compute the type of the expression under the definition
         val underCtx =
-          new TypeContext(ctx.namesInScope, varPool.size, ctx.types + (name -> (preciseDefType, preciseAllVars)))
-        val resultType = computeRec(underCtx, solver, scopedEx)
-        // the expression under let-in may further refine a parameterized operator signature
-        if (isPoly) {
-          solver.solve() match {
-            case Some(sub) =>
-              val refinedType = sub(preciseDefType)
-              if (refinedType != preciseDefType) {
-                onTypeFound(defEx.sourceRef, refinedType)
-              }
-          }
-        }
-
-        resultType
+          new TypeContext(ctx.namesInScope, varPool.size, ctx.types + (name -> (principalDefType, freeVars)))
+        computeRec(underCtx, solver, scopedEx)
 
       // an ill-formed let expression
       case EtcLet(_, _, _) =>
