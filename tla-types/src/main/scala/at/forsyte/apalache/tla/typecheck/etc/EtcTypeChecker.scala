@@ -163,14 +163,14 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
       case EtcAppByName(name, args @ _*) =>
         if (ctx.types.contains(name.name)) {
           var (nameType, allVars) = ctx.types(name.name)
-          onTypeFound(name.sourceRef, nameType)
-          if (allVars.nonEmpty && !ctx.namesInScope.contains(name.name)) {
+          if (allVars.nonEmpty) {
             // The type is parametric: instantiate it with new type variables.
             // We do not instantiate the type if the call is recursive.
             val varRenamingMap = allVars.toSeq.map(i => i -> varPool.fresh)
             nameType = Substitution(varRenamingMap: _*)(nameType)
           }
 
+          onTypeFound(name.sourceRef, nameType)
           computeRec(ctx, solver, mkApp(ex.sourceRef, Seq(nameType), args: _*))
         } else {
           onTypeError(ex.sourceRef, s"The operator $name is used before it is defined.")
