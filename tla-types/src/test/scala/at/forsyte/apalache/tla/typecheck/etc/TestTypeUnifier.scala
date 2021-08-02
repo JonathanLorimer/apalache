@@ -117,17 +117,17 @@ class TestTypeUnifier extends FunSuite with EasyMockSugar with BeforeAndAfterEac
     assert(
         unifier
           .unify(Substitution.empty, VarT1(0), VarT1(1))
-          .contains((Substitution(1 -> VarT1(0)), VarT1(0))))
+          .contains((Substitution(0 -> VarT1(1)), VarT1(1))))
     assert(
         unifier
           .unify(Substitution(1 -> IntT1()), VarT1(0), VarT1(1))
           .contains((Substitution(0 -> IntT1(), 1 -> IntT1()), IntT1())))
     // there is no problem with the cycle a -> b -> c -> a
-    val expectedSub = Substitution(1 -> VarT1(0), 2 -> VarT1(0))
+    val expectedSub = Substitution(0 -> VarT1(2), 1 -> VarT1(2))
     assert(
         unifier
           .unify(Substitution.empty, parser("<<a, b, c>>"), parser("<<b, c, a>>"))
-          .contains((expectedSub, parser("<<a, a, a>>"))))
+          .contains((expectedSub, parser("<<c, c, c>>"))))
   }
 
   test("non-unifying polytypes") {
@@ -146,11 +146,11 @@ class TestTypeUnifier extends FunSuite with EasyMockSugar with BeforeAndAfterEac
   // regression
   test("unifying variables via sets") {
     val sub = Substitution(1003 -> SetT1(VarT1(0)), 1004 -> SetT1(VarT1(1005)))
-    val expected = Substitution(1003 -> SetT1(VarT1(0)), 1004 -> SetT1(VarT1(0)), 1005 -> VarT1(0))
+    val expected = Substitution(1003 -> SetT1(VarT1(1005)), 1004 -> SetT1(VarT1(1005)), 0 -> VarT1(1005))
     assert(
         unifier
           .unify(sub, VarT1(1004), VarT1(1003))
-          .contains((expected, SetT1(VarT1(0)))))
+          .contains((expected, SetT1(VarT1(1005)))))
   }
 
   // regression

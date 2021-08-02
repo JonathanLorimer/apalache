@@ -3,7 +3,6 @@ package at.forsyte.apalache.tla.typecheck.etc
 import at.forsyte.apalache.tla.lir.{
   BoolT1, ConstT1, FunT1, IntT1, OperT1, RealT1, RecT1, SeqT1, SetT1, SparseTupT1, StrT1, TlaType1, TupT1, VarT1
 }
-import at.forsyte.apalache.tla.typecheck._
 import at.forsyte.apalache.tla.typecheck.etc.TypeUnifier.CycleDetected
 
 import scala.collection.immutable.SortedMap
@@ -201,7 +200,9 @@ class TypeUnifier {
         if (varNo != otherVarNo) {
           val larger = varNo max otherVarNo
           val smaller = varNo min otherVarNo
-          // If varNo was bound, assign its value to the larger variable
+          // If varNo was bound, assign its value to the larger variable.
+          // We prefer the variable with the larger index,
+          // as it makes it easy to find out quantified variables in a generic schema of a user-defined operator.
           varNoValOpt.map(insert(larger, _))
           // Assign the smaller variable to the larger
           solution += smaller -> VarT1(larger)

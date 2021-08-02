@@ -52,8 +52,8 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
 
   private def computeRec(ctx: TypeContext, solver: ConstraintSolver, ex: EtcExpr): TlaType1 = {
     ex match {
-      // a type: either monotype or polytype
       case EtcConst(polytype) =>
+        // A constant type, either monotype or polytype.
         // add the constraint: x = polytype, for a fresh x
         val fresh = varPool.fresh
         val clause = EqClause(fresh, polytype)
@@ -62,8 +62,8 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
         solver.addConstraint(clause)
         fresh
 
-      // an inline type declaration
       case EtcTypeDecl(name: String, declaredType: TlaType1, scopedEx: EtcExpr) =>
+        // An inline type annotation.
         // Just propagate the annotated name down the tree. It will be used in a let definition.
         // All free type variables in the type are considered to be universally quantified.
         val allVars = declaredType.usedNames
@@ -75,8 +75,8 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
         solver.addConstraint(clause)
         computeRec(extCtx, solver, scopedEx)
 
-      // a variable name, either an operator name, or a variable introduced by lambda (EtcAbs)
       case EtcName(name) =>
+        // a variable name, either an operator name, or a variable introduced by lambda (EtcAbs)
         if (ctx.types.contains(name)) {
           val (knownType, allVars) = ctx.types(name)
           if (knownType.usedNames.isEmpty) {
@@ -92,8 +92,8 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
           throw new UnwindException
         }
 
-      // the most interesting part: the operator application
       case appEx @ EtcApp(operTypes, args @ _*) =>
+        // Application by type.
         // Apply toList first, in case `args` is a stream. The reason is that `computeRec` introduces side effects
         val argTypes = args.toList.map(arg => computeRec(ctx, solver, arg))
         val resVar = varPool.fresh
@@ -161,6 +161,7 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
 
       // Operator application by name. Resolve the name and pass the resolved expression to the application case.
       case EtcAppByName(name, args @ _*) =>
+        // application by name
         if (ctx.types.contains(name.name)) {
           var (nameType, allVars) = ctx.types(name.name)
           if (allVars.nonEmpty) {
@@ -170,15 +171,21 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
             nameType = Substitution(varRenamingMap: _*)(nameType)
           }
 
-          onTypeFound(name.sourceRef, nameType)
+          // If we reported the type right away, it would contained variables that have not been resolved yet.
+          // Hence, we introduce a fresh variable to get the type reported, once the solver knows it most precisely.
+          val fresh = varPool.fresh
+          val clause = EqClause(fresh, nameType)
+            .setOnTypeFound(tt => onTypeFound(name.sourceRef, tt))
+          solver.addConstraint(clause)
+          // delegate the rest to the application-by-type
           computeRec(ctx, solver, mkApp(ex.sourceRef, Seq(nameType), args: _*))
         } else {
           onTypeError(ex.sourceRef, s"The operator $name is used before it is defined.")
           throw new UnwindException
         }
 
-      // lambda x \in e1, y \in e2, ...: scopedEx
       case EtcAbs(scopedEx, binders @ _*) =>
+        // lambda x \in e1, y \in e2, ...: scopedEx
         val extCtx = translateBinders(ctx, solver, binders)
         // compute the expression in the scope
         val underlyingType = computeRec(extCtx, solver, scopedEx)
@@ -195,8 +202,9 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
         solver.addConstraint(lambdaClause)
         operType
 
-      // let name = lambda x \in X, y \in Y, ...: boundEx in scopedEx
       case EtcLet(name, defEx @ EtcAbs(defBody, binders @ _*), scopedEx) =>
+        // Let-definitions that support polymorphism.
+        // let name = lambda x \in X, y \in Y, ...: boundEx in scopedEx
         // Before analyzing the operator definition, try to partially solve the equations in the current context.
         // If it is successful, use the partial solution to refine the types in the type context.
         val approxSolution = solver.solvePartially().getOrElse(throw new UnwindException)
@@ -270,7 +278,7 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
               sub(defType)
           }
 
-        // Find free variables of the principal type and use them as quantified variables
+        // Find free variables of the principal type, to use them as quantified variables
         val freeVars = principalDefType.usedNames.filter(_ >= ctx.poolSize)
 
         // compute the type of the expression under the definition
@@ -282,18 +290,6 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
       case EtcLet(_, _, _) =>
         throw new RuntimeException("Bug in type checker. Ill-formed let-expression: " + ex)
     }
-  }
-
-  // rename free variables according to the substitution
-  private def subFreeVars(vars: Set[Int], sub: Substitution): Set[Int] = {
-    def merge(set: Set[Int], i: Int): Set[Int] = {
-      sub(VarT1(i)) match {
-        case VarT1(no) => set + no
-        case _         => set
-      }
-    }
-
-    vars.foldLeft(Set[Int]())(merge)
   }
 
   // produce constraints for the binders that are used in a lambda expression

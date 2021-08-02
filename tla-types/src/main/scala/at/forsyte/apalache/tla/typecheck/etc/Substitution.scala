@@ -82,4 +82,18 @@ object Substitution {
 
     recFun
   }
+
+  /**
+   * To improve user experience, for a set of variables, produce a substitution that renames them to a, b, c, ...
+   *
+   * @param vars variables to rename
+   * @return the substitution that renames ordered variables to a, b, c, ...
+   */
+  def mkNormal(vars: Iterable[Int]): Substitution = {
+    val (_, mapping) =
+      vars.toList.sorted.foldLeft(0, Map[Int, TlaType1]()) { case ((newNo, map), oldNo) =>
+        (newNo + 1, map + (oldNo -> VarT1(newNo)))
+      }
+    Substitution(mapping)
+  }
 }
