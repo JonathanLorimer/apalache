@@ -2,6 +2,42 @@
      This file is generated. Do not write release notes here.
      Notes for unreleased changes go in ./UNRELEASED.md -->
 
+## 0.15.12
+
+### Bug fixes
+
+* Fix infinite recursion in the type unifier, see #925
+* Fix unhandled errors on non-existent record field access, see #874
+* Fix unhandled `MatchError` on invalid operator type annotations, see #919
+
+## 0.15.11
+
+### Features
+
+* Implemented support for SelectSeq, see #873
+
+### Bug fixes
+
+* Fixed crash on specs with no variables, see #871
+
+## 0.15.10
+
+### Bug fixes
+
+* Fixed a bug which made Fold(Set/Seq) unusable in Init or CInit
+
+## 0.15.9
+
+### Features
+
+* Parser: parse error on TLAPS syntax such as `Inv!2`, see #876
+* Checker: support for Fold(Set/Seq), see #693
+
+### Bug fixes
+
+* Fixed #540
+* Fixed #593
+
 ## 0.15.8
 
 ### Bug fixes

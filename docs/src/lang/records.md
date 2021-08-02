@@ -51,26 +51,29 @@ carries the information about the names of the record fields and their types.
 Similarly, Apalache assigns the type of a set of records, when it processes a
 record set constructor.  See the [Apalache ADR002][] on types.
 
-_Owing to the type information, records are translated into SMT more efficiently
-by Apalache than the general functions._
+_Owing to the type information, records are translated into SMT more efficiently by Apalache than the general
+functions._
 
-
-It is quite common to mix records of different shapes into sets. For instance,
-see how the variable `msgs` is updated in [Paxos]. To address this pattern,
-Apalache treats records that do not disagree on field types to be
-type-compatible. For instance, the records `[type |-> "A", a |-> 3]`
+It is quite common to mix records of different shapes into sets. For instance, see how the variable `msgs` is updated
+in [Paxos]. To address this pattern, Apalache treats records that do not disagree on field types to be type-compatible.
+For instance, the records `[type |-> "A", a |-> 3]`
 and `[type |-> "B", b |-> TRUE]` have the joint type:
 
 ```
   [type: Str, a: Int, b: Bool]
 ```
 
+If your spec tries to access a field on a record without that field, Apalache will fail with the following error:
+
+```
+Access to non-existent record field ...
+```
+
 ----------------------------------------------------------------------------
 
 ## Operators
 
-In the Python examples, we are using the package [frozendict], to produce an
-immutable dictionary.
+In the Python examples, we are using the package [frozendict], to produce an immutable dictionary.
 
 ----------------------------------------------------------------------------
 

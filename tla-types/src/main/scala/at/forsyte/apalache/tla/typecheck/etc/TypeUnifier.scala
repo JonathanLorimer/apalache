@@ -9,7 +9,9 @@ import scala.collection.immutable.SortedMap
 
 /**
  * <p>A unification solver for the TlaType1 system. Note that our subtyping relation unifies records
- * and sparse tuples with a different number of fields. It does so by extending the key set, not by shrinking it.</p>
+ * and sparse tuples with a different number of fields. It does so by extending the key set, not by shrinking it.
+ * This unifier is a quick prototype. We should probably use a more efficient and more robust algorithm from a textbook.
+ * </p>
  *
  * <p>This class is not designed for concurrency. Use different instances in different threads.</p>
  *
@@ -80,6 +82,10 @@ class TypeUnifier {
       case (c @ ConstT1(lname), ConstT1(rname)) =>
         // uninterpreted constant types must have the same name
         if (lname != rname) None else Some(c)
+
+      case (lvar @ VarT1(lname), VarT1(rname)) if lname == rname =>
+        // if it is the same variable, do not recurse, but just return the result
+        Some(lvar)
 
       // variables contribute to the solutions
       case (VarT1(lname), rvar @ VarT1(rname)) =>

@@ -917,18 +917,6 @@ The outcome is: NoError
 EXITCODE: OK
 ```
 
-### check typevars.tla succeeds
-
-This tests make sure that the model checker allows us to write parametric operator definitions.
-
-```sh
-$ apalache-mc check typevars.tla | sed 's/I@.*//'
-...
-The outcome is: NoError
-...
-EXITCODE: OK
-```
-
 ### check SimpT1 succeeds
 
 This test was moved from a unit test of SymbTransGenerator. The goal of the test is to check that symbolic transitions
@@ -1713,21 +1701,6 @@ EXITCODE: OK
 
 ```sh
 $ apalache-mc typecheck schroedinger_cat.tla | sed 's/[IEW]@.*//'
-...
-PASS #1: TypeCheckerSnowcat
- > Running Snowcat .::.
- > Your types are great!
- > All expressions are typed
-...
-Type checker [OK]
-...
-EXITCODE: OK
-```
-
-### typecheck typevars.tla
-
-```sh
-$ apalache-mc typecheck typevars.tla | sed 's/[IEW]@.*//'
 ...
 PASS #1: TypeCheckerSnowcat
  > Running Snowcat .::.
