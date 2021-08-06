@@ -167,7 +167,7 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
           if (allVars.nonEmpty) {
             // The type is parametric: instantiate it with new type variables.
             // We do not instantiate the type if the call is recursive.
-            val varRenamingMap = allVars.toSeq.map(i => i -> varPool.fresh)
+            val varRenamingMap = allVars.toSeq.map(v => EqClass(v) -> varPool.fresh)
             nameType = Substitution(varRenamingMap: _*)(nameType)
           }
 

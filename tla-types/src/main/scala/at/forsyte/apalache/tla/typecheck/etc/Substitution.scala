@@ -3,32 +3,86 @@ package at.forsyte.apalache.tla.typecheck.etc
 import at.forsyte.apalache.tla.lir.{
   BoolT1, ConstT1, FunT1, IntT1, OperT1, RealT1, RecT1, SeqT1, SetT1, SparseTupT1, StrT1, TlaType1, TupT1, VarT1
 }
-import at.forsyte.apalache.tla.typecheck._
 
 /**
  * A substitution from type variables to types.
- * @param context a mapping from variable names to types.
+ *
+ * @param mapping a mapping from variable names to types.
  */
-class Substitution(val context: Map[Int, TlaType1]) {
+class Substitution(val mapping: Map[EqClass, TlaType1]) {
+  // map every variable to its equivalence class (assuming that the classes are disjoint)
+  private lazy val varToClass = mapping.keys.foldLeft(Map[Int, EqClass]()) { (map, cls) =>
+    map ++ cls.typeVars.map(_ -> cls)
+  }
+
   def apply(tp: TlaType1): TlaType1 = {
-    Substitution.mk(context)(tp)
+    sub(tp)
+  }
+
+  /**
+   * Substitute variables with the types that are assigned in the context.
+   *
+   * @param tp a type term
+   * @return the type term in which the variables have been substituted
+   */
+  def sub(tp: TlaType1): TlaType1 = {
+    tp match {
+      case VarT1(no) =>
+        if (varToClass.contains(no)) {
+          mapping(varToClass(no))
+        } else {
+          tp
+        }
+
+      case IntT1() | BoolT1() | RealT1() | StrT1() | ConstT1(_) =>
+        tp
+
+      case SetT1(elem) =>
+        SetT1(sub(elem))
+
+      case SeqT1(elem) =>
+        SeqT1(sub(elem))
+
+      case TupT1(elems @ _*) =>
+        TupT1(elems.map(sub): _*)
+
+      case SparseTupT1(fieldTypes) =>
+        SparseTupT1(fieldTypes.map(kv => (kv._1, sub(kv._2))))
+
+      case RecT1(fieldTypes) =>
+        RecT1(fieldTypes.map(kv => (kv._1, sub(kv._2))))
+
+      case FunT1(arg, res) =>
+        FunT1(sub(arg), sub(res))
+
+      case OperT1(args, res) =>
+        OperT1(args.map(sub), sub(res))
+    }
   }
 
   override def toString: String = {
-    "Sub{%s}".format(String.join(", ", context.toSeq.map(p => "%s -> %s".format(VarT1(p._1), p._2)): _*))
+    def cls(c: EqClass): String = c.typeVars.map(VarT1(_).toString).mkString(", ")
+
+    "Sub{%s}".format(String.join(", ", mapping.toSeq.map(p => "[%s] -> %s".format(cls(p._1), p._2)): _*))
   }
 
   def canEqual(other: Any): Boolean = other.isInstanceOf[Substitution]
 
+  // Comparison of two substitutions is expensive, but we mainly use it for testing.
+  // We use structural equality of equivalence classes instead of shallow comparison by ids.
   override def equals(other: Any): Boolean = other match {
     case that: Substitution =>
-      (that canEqual this) &&
-        context == that.context
+      (mapping.size == that.mapping.size) && mapping.forall { case (lcls, ltype) =>
+        that.mapping.exists { case (rcls, rtype) =>
+          lcls.deepEquals(rcls) && ltype == rtype
+        }
+      }
+
     case _ => false
   }
 
   override def hashCode(): Int = {
-    val state = Seq(context)
+    val state = Seq(mapping)
     state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }
@@ -36,64 +90,11 @@ class Substitution(val context: Map[Int, TlaType1]) {
 object Substitution {
   val empty = new Substitution(Map.empty)
 
-  def apply(elems: (Int, TlaType1)*): Substitution = {
+  def apply(elems: (EqClass, TlaType1)*): Substitution = {
     new Substitution(Map(elems: _*))
   }
 
-  def apply(context: Map[Int, TlaType1]): Substitution = {
+  def apply(context: Map[EqClass, TlaType1]): Substitution = {
     new Substitution(context)
-  }
-
-  def mk(fun: PartialFunction[Int, TlaType1]): TlaType1 => TlaType1 = {
-    def recFun(tp: TlaType1): TlaType1 = {
-      tp match {
-        case VarT1(no) =>
-          if (fun.isDefinedAt(no)) {
-            fun(no)
-          } else {
-            tp
-          }
-
-        case IntT1() | BoolT1() | RealT1() | StrT1() | ConstT1(_) =>
-          tp
-
-        case SetT1(elem) =>
-          SetT1(recFun(elem))
-
-        case SeqT1(elem) =>
-          SeqT1(recFun(elem))
-
-        case TupT1(elems @ _*) =>
-          TupT1(elems.map(recFun): _*)
-
-        case SparseTupT1(fieldTypes) =>
-          SparseTupT1(fieldTypes.map(kv => (kv._1, recFun(kv._2))))
-
-        case RecT1(fieldTypes) =>
-          RecT1(fieldTypes.map(kv => (kv._1, recFun(kv._2))))
-
-        case FunT1(arg, res) =>
-          FunT1(recFun(arg), recFun(res))
-
-        case OperT1(args, res) =>
-          OperT1(args.map(recFun), recFun(res))
-      }
-    }
-
-    recFun
-  }
-
-  /**
-   * To improve user experience, for a set of variables, produce a substitution that renames them to a, b, c, ...
-   *
-   * @param vars variables to rename
-   * @return the substitution that renames ordered variables to a, b, c, ...
-   */
-  def mkNormal(vars: Iterable[Int]): Substitution = {
-    val (_, mapping) =
-      vars.toList.sorted.foldLeft(0, Map[Int, TlaType1]()) { case ((newNo, map), oldNo) =>
-        (newNo + 1, map + (oldNo -> VarT1(newNo)))
-      }
-    Substitution(mapping)
   }
 }
