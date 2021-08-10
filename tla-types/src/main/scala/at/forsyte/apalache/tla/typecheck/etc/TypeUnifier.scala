@@ -62,7 +62,7 @@ class TypeUnifier {
     // try to unify
     val result =
       compute(lhs, rhs) flatMap { unifiedType =>
-        // use only representative variables of every equivalence class
+        // use only the representative variables of every equivalence class
         val canonical = mkCanonicalSub
         val substitution = new Substitution(solution.mapValues { tt => canonical(tt) })
         Some((substitution, substitution(unifiedType)))
@@ -88,8 +88,11 @@ class TypeUnifier {
   }
 
   private def compute(lhs: TlaType1, rhs: TlaType1): Option[TlaType1] = {
-    // the terminal case that requires a check for cyclic references
-    def unifyVarWithTerm(typeVar: Int, typeTerm: TlaType1): Option[TlaType1] = {
+    // Try to unify a variable with a non-variable term `typeTerm`.
+    // If `typeTerm` refers to a variable in the equivalence class of `typeVar`, then this is a cyclic reference,
+    // and there should be no unifier.
+    def unifyVarWithNonVarTerm(typeVar: Int, typeTerm: TlaType1): Option[TlaType1] = {
+      // Note that `typeTerm` is not a variable.
       val varClass = varToClass(typeVar)
       if (doesUseClass(typeTerm, varClass)) {
         // No unifier: `typeTerm` refers to a variable in the equivalence class of `typeVar`.
@@ -103,7 +106,7 @@ class TypeUnifier {
             Some(typeTerm)
 
           case _ =>
-            // both equivalence classes are assigned terms, unify them
+            // unify `typeTerm` with the term assigned to the equivalence class, if possible
             val unifier = compute(solution(varClass), typeTerm)
             unifier.foreach { t => solution += varClass -> t }
             unifier
@@ -138,10 +141,10 @@ class TypeUnifier {
         }
 
       case (VarT1(name), other) =>
-        unifyVarWithTerm(name, other)
+        unifyVarWithNonVarTerm(name, other)
 
       case (other, VarT1(name)) =>
-        unifyVarWithTerm(name, other)
+        unifyVarWithNonVarTerm(name, other)
 
       // functions should unify component-wise
       case (FunT1(larg, lres), FunT1(rarg, rres)) =>
@@ -242,6 +245,8 @@ class TypeUnifier {
       val lterm = solution(lcls)
       val rterm = solution(rcls)
       lcls.typeVars ++= rcls.typeVars
+      // Move the variables of the right class to the left class and remove the right class.
+      // This is safe, because terms never access the classes directly, but refer to them via variables.
       rcls.typeVars foreach { v => varToClass += v -> lcls }
       solution -= rcls
       // if the assigned terms unify, add the unifier as a solution
@@ -257,11 +262,13 @@ class TypeUnifier {
       vars.map(varToClass)
     }
 
+    // look for equivalence classes by simple depth-first search
     var visited: Set[EqClass] = Set.empty
     var toVisit = varsToClasses(tt.usedNames)
     while (toVisit.nonEmpty) {
       val cls = toVisit.head
       if (cls == lookFor) {
+        // found an occurrence of `lookFor`, return immediately
         return true
       }
       visited += cls
@@ -277,7 +284,7 @@ class TypeUnifier {
   // that replaces every variable of an equivalence class with the largest variable in the class
   private def mkCanonicalSub: Substitution = {
     val mapping = solution.keys.toSeq.map { cls =>
-      // use the maximum as the representative of the equivalence class
+      // use the variable that has the maximal index as the representative of the equivalence class
       (cls, VarT1(cls.typeVars.reduce(Math.max)))
     }
     new Substitution(Map[EqClass, TlaType1](mapping: _*))
