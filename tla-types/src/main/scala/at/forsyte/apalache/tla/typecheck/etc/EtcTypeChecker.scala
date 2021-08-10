@@ -38,7 +38,7 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
           None
 
         case Some(sub) =>
-          val exactType = sub(rootType)
+          val exactType = sub.subRec(rootType)
           onTypeFound(rootEx.sourceRef, exactType)
           Some(exactType)
       }
@@ -111,7 +111,7 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
         def onOverloadingError(sub: Substitution, signatures: Seq[TlaType1]): Unit = {
           // The constraint solver has failed to solve the disjunctive clause:
           // operVar = operType_1 \/ ... \/ operVar = operType_n
-          val evalArgTypes = argTypes.map(sub(_)).mkString(" and ")
+          val evalArgTypes = argTypes.map(sub.subRec).mkString(" and ")
           val argOrArgs = pluralArgs(argTypes.length)
           if (signatures.isEmpty) {
             onTypeError(appEx.sourceRef, s"No matching signature for $argOrArgs $evalArgTypes")
@@ -125,9 +125,9 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
 
         def onArgsMatchError(sub: Substitution, types: Seq[TlaType1]): Unit = {
           // no solution for: operVar = (arg_1, ..., arg_k) => resVar
-          val evalArgTypes = argTypes.map(sub(_)).mkString(" and ")
+          val evalArgTypes = argTypes.map(sub.subRec).mkString(" and ")
           val argOrArgs = pluralArgs(argTypes.length)
-          val evalSig = sub(operVar)
+          val evalSig = sub.subRec(operVar)
           onTypeError(appEx.sourceRef, s"No match between operator signature $evalSig and $argOrArgs $evalArgTypes")
         }
 
@@ -138,7 +138,7 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
 
         def onSigMatchError(sub: Substitution, sigs: Seq[TlaType1]): Unit = {
           // no solution for: operVar = operType_1
-          val evalArgTypes = argTypes.map(sub(_)).mkString(" and ")
+          val evalArgTypes = argTypes.map(sub.subRec).mkString(" and ")
           val argOrArgs = pluralArgs(argTypes.length)
           val evalSig = sigs.head
           onTypeError(appEx.sourceRef, s"No match between operator signature $evalSig and $argOrArgs $evalArgTypes")
@@ -168,7 +168,7 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
             // The type is parametric: instantiate it with new type variables.
             // We do not instantiate the type if the call is recursive.
             val varRenamingMap = allVars.toSeq.map(v => EqClass(v) -> varPool.fresh)
-            nameType = Substitution(varRenamingMap: _*)(nameType)
+            nameType = Substitution(varRenamingMap: _*).subRec(nameType)
           }
 
           // If we reported the type right away, it would contained variables that have not been resolved yet.
@@ -232,7 +232,7 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
         // translate the binders in the lambda expression, so we can quickly propagate the types of the parameters
         val preCtx =
           new TypeContext(ctx.namesInScope + name, ctx.poolSize,
-              (ctx.types + (name -> (operSig, operAllVars))).mapValues(p => (approxSolution(p._1), p._2)))
+              (ctx.types + (name -> (operSig, operAllVars))).mapValues(p => (approxSolution.subRec(p._1), p._2)))
         val extCtx = translateBinders(preCtx, letInSolver, binders)
         val annotationParams = operSig.args
         annotationParams.zip(binders.map { case (pname, _) => (pname, extCtx(pname.name)._1) }).foreach {
@@ -275,7 +275,7 @@ class EtcTypeChecker(varPool: TypeVarPool, inferPolytypes: Boolean = false) exte
               throw new UnwindException
 
             case Some(sub) =>
-              sub(defType)
+              sub.subRec(defType)
           }
 
         // Find free variables of the principal type, to use them as quantified variables

@@ -64,8 +64,8 @@ class TypeUnifier {
       compute(lhs, rhs) flatMap { unifiedType =>
         // use only the representative variables of every equivalence class
         val canonical = mkCanonicalSub
-        val substitution = new Substitution(solution.mapValues { tt => canonical(tt) })
-        Some((substitution, substitution(unifiedType)))
+        val substitution = new Substitution(solution.mapValues { tt => canonical.sub(tt)._1 })
+        Some((substitution, substitution.sub(unifiedType)._1))
       }
     // help GC to clean up later
     solution = Map.empty

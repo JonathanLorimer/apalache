@@ -3,6 +3,7 @@ package at.forsyte.apalache.tla.typecheck.etc
 import at.forsyte.apalache.tla.lir.{
   BoolT1, ConstT1, FunT1, IntT1, OperT1, RealT1, RecT1, SeqT1, SetT1, SparseTupT1, StrT1, TlaType1, TupT1, VarT1
 }
+import at.forsyte.apalache.tla.typecheck.etc.Substitution.SUB_LIMIT
 
 /**
  * A substitution from type variables to types.
@@ -15,49 +16,84 @@ class Substitution(val mapping: Map[EqClass, TlaType1]) {
     map ++ cls.typeVars.map(_ -> cls)
   }
 
-  def apply(tp: TlaType1): TlaType1 = {
-    sub(tp)
+  /**
+   * Substitute variables with the types that are assigned in the context.
+   * Importantly, the substitution is applied only once.
+   *
+   * @param tp a type term
+   * @return the type term in which the variables have been substituted and whether any substitution has happened
+   */
+  def sub(tp: TlaType1): (TlaType1, Boolean) = {
+    tp match {
+      case VarT1(no) =>
+        if (varToClass.contains(no)) {
+          val result = mapping(varToClass(no))
+          (result, tp != result)
+        } else {
+          (tp, false)
+        }
+
+      case IntT1() | BoolT1() | RealT1() | StrT1() | ConstT1(_) =>
+        (tp, false)
+
+      case SetT1(elem) =>
+        val (nelem, isChanged) = sub(elem)
+        (SetT1(nelem), isChanged)
+
+      case SeqT1(elem) =>
+        val (nelem, isChanged) = sub(elem)
+        (SeqT1(nelem), isChanged)
+
+      case TupT1(elems @ _*) =>
+        val (nelems, isChanged) = elems.map(sub).unzip
+        (TupT1(nelems: _*), isChanged.contains(true))
+
+      case SparseTupT1(fieldTypes) =>
+        val ntypesAndChanged = fieldTypes.map(kv => (kv._1, sub(kv._2)))
+        val ntypes = ntypesAndChanged.mapValues(_._1)
+        val isChanged = ntypesAndChanged.exists(_._2._2)
+        (SparseTupT1(ntypes), isChanged)
+
+      case RecT1(fieldTypes) =>
+        val ntypesAndChanged = fieldTypes.map(kv => (kv._1, sub(kv._2)))
+        val ntypes = ntypesAndChanged.mapValues(_._1)
+        val isChanged = ntypesAndChanged.exists(_._2._2)
+        (RecT1(ntypes), isChanged)
+
+      case FunT1(arg, res) =>
+        val (narg, isChangedArg) = sub(arg)
+        val (nres, isChangedRes) = sub(res)
+        (FunT1(narg, nres), isChangedArg || isChangedRes)
+
+      case OperT1(args, res) =>
+        val (nargs, isChangedArgs) = args.map(sub).unzip
+        val (nres, isChangedRes) = sub(res)
+        (OperT1(nargs, nres), isChangedRes || isChangedArgs.contains(true))
+    }
   }
 
   /**
-   * Substitute variables with the types that are assigned in the context.
+   * Recursively substitute variables with the types that are assigned in the context.
+   * This substitution applies until it converges, assuming that the substitution is acyclic.
    *
    * @param tp a type term
    * @return the type term in which the variables have been substituted
    */
-  def sub(tp: TlaType1): TlaType1 = {
-    tp match {
-      case VarT1(no) =>
-        if (varToClass.contains(no)) {
-          mapping(varToClass(no))
-        } else {
-          tp
-        }
-
-      case IntT1() | BoolT1() | RealT1() | StrT1() | ConstT1(_) =>
-        tp
-
-      case SetT1(elem) =>
-        SetT1(sub(elem))
-
-      case SeqT1(elem) =>
-        SeqT1(sub(elem))
-
-      case TupT1(elems @ _*) =>
-        TupT1(elems.map(sub): _*)
-
-      case SparseTupT1(fieldTypes) =>
-        SparseTupT1(fieldTypes.map(kv => (kv._1, sub(kv._2))))
-
-      case RecT1(fieldTypes) =>
-        RecT1(fieldTypes.map(kv => (kv._1, sub(kv._2))))
-
-      case FunT1(arg, res) =>
-        FunT1(sub(arg), sub(res))
-
-      case OperT1(args, res) =>
-        OperT1(args.map(sub), sub(res))
+  def subRec(tp: TlaType1): TlaType1 = {
+    var limit = SUB_LIMIT
+    var intermediateType = tp
+    while (limit > 0) {
+      val (newType, isChanged) = sub(intermediateType)
+      if (!isChanged) {
+        return newType
+      } else {
+        intermediateType = newType
+      }
+      limit -= 1
     }
+
+    throw new IllegalStateException(
+        s"Recursive substitution took more than $SUB_LIMIT iterations. Broken substitution?")
   }
 
   override def toString: String = {
@@ -88,6 +124,15 @@ class Substitution(val mapping: Map[EqClass, TlaType1]) {
 }
 
 object Substitution {
+
+  /**
+   * The limit on the number of recursive substitutions (to avoid infinite cycles).
+   */
+  val SUB_LIMIT = 100000
+
+  /**
+   * An empty substitution.
+   */
   val empty = new Substitution(Map.empty)
 
   def apply(elems: (EqClass, TlaType1)*): Substitution = {

@@ -1,6 +1,6 @@
 package at.forsyte.apalache.tla.typecheck.etc
 
-import at.forsyte.apalache.tla.lir.{BoolT1, ConstT1, FunT1, IntT1, OperT1, RealT1, RecT1, SetT1, StrT1, VarT1}
+import at.forsyte.apalache.tla.lir.{BoolT1, ConstT1, FunT1, IntT1, OperT1, RealT1, RecT1, SeqT1, SetT1, StrT1, VarT1}
 import at.forsyte.apalache.io.typecheck.parser.{DefaultType1Parser, Type1Parser}
 import org.junit.runner.RunWith
 import org.scalatest.easymock.EasyMockSugar
@@ -133,6 +133,21 @@ class TestTypeUnifier extends FunSuite with EasyMockSugar with BeforeAndAfterEac
         unifier
           .unify(Substitution.empty, parser("<<a, b, c>>"), parser("<<b, c, a>>"))
           .contains((expectedSub, parser("<<c, c, c>>"))))
+  }
+
+  test("unifying Seq(a) and Seq(Int)") {
+    assert(
+        unifier
+          .unify(Substitution.empty, SeqT1(VarT1(0)), SeqT1(IntT1()))
+          .contains((Substitution(EqClass(0) -> IntT1()), SeqT1(IntT1()))))
+  }
+
+  test("unifying a => Set(a) and Int => b") {
+    assert(
+        unifier
+          .unify(Substitution.empty, OperT1(Seq(VarT1(0)), SetT1(VarT1(0))), OperT1(Seq(IntT1()), VarT1(1)))
+          .contains((Substitution(EqClass(0) -> IntT1(), EqClass(1) -> SetT1(VarT1(0))),
+                  OperT1(Seq(IntT1()), SetT1(IntT1())))))
   }
 
   test("non-unifying polytypes") {
