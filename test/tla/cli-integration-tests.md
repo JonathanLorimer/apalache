@@ -1712,6 +1712,23 @@ Type checker [OK]
 EXITCODE: OK
 ```
 
+### typecheck letpoly.tla
+
+Test the Snowcat support let-polymorphism.
+
+```sh
+$ apalache-mc typecheck letpoly.tla | sed 's/[IEW]@.*//'
+...
+PASS #1: TypeCheckerSnowcat
+ > Running Snowcat .::.
+ > Your types are great!
+ > All expressions are typed
+...
+Type checker [OK]
+...
+EXITCODE: OK
+```
+
 ## Running the config command
 
 ### config --enable-stats=false

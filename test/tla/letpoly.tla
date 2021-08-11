@@ -1,5 +1,6 @@
-------------------------------- MODULE typevars -------------------------------
-\* a test that shows that parametric types can be instantiated
+------------------------------- MODULE letpoly -------------------------------
+\* A test that shows that parametric types can be instantiated.
+\* This test requires the type checker to support let polymorphism.
 VARIABLE 
 \* @type: Str -> Int;
 strToInt,
@@ -17,7 +18,9 @@ Init ==
   /\ intToStr = [ i \in {} |-> "" ]
 
 Next ==
+  \* in the line below, Extend should accept Str -> Int, Str, and Int
   /\ strToInt' = Extend(strToInt, "a", 1)
+  \* in the line below, Extend should accept Int -> Str, Int, and Str
   /\ intToStr' = Extend(intToStr, 1, "a")
     
 ===============================================================================
